@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Thursday Night Matchups</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+:root{
+  --ink:#10222C;
+  --court-deep:#16425B;
+  --court-mid:#2F6690;
+  --court-pale:#DCE9EF;
+  --chalk:#F6F3EA;
+  --chalk-dim:#EAE6D9;
+  --ball:#D7E86B;
+  --ball-deep:#AEBF3F;
+  --fault:#C1442E;
+  --line: rgba(16,34,44,0.12);
+  --radius: 10px;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  background:var(--chalk);
+  color:var(--ink);
+  font-family:'Inter',system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,.display{
+  font-family:'Barlow Condensed',system-ui,sans-serif;
+  text-transform:uppercase;
+  letter-spacing:0.02em;
+}
+#app{max-width:920px;margin:0 auto;padding:0 16px 60px;}
+
+/* Header / scoreboard */
+.scoreboard{
+  background:var(--court-deep);
+  color:var(--chalk);
+  margin:0 -16px 18px;
+  padding:22px 16px 0;
+  border-radius:0 0 18px 18px;
+}
+.scoreboard .title{
+  font-weight:800;
+  font-size:28px;
+  margin:0 0 2px;
+  display:flex;align-items:baseline;gap:10px;
+}
+.scoreboard .title span.dot{
+  width:10px;height:10px;border-radius:50%;background:var(--ball);display:inline-block;
+}
+.scoreboard .sub{
+  font-family:'Inter';text-transform:none;letter-spacing:0;
+  color:var(--court-pale);font-size:13px;margin-bottom:16px;
+}
+.tabs{display:flex;gap:4px;}
+.tab{
+  flex:1;text-align:center;padding:10px 6px;cursor:pointer;
+  font-family:'Barlow Condensed';font-weight:700;letter-spacing:0.04em;
+  font-size:14px;text-transform:uppercase;color:var(--court-pale);
+  border-bottom:3px solid transparent;
+  transition:color .15s, border-color .15s;
+}
+.tab.active{color:var(--ball);border-color:var(--ball);}
+.tab:hover{color:var(--chalk);}
+
+main.panel{display:none;}
+main.panel.active{display:block;}
+
+/* Cards / generic */
+.card{
+  background:#fff;border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px;margin-bottom:14px;
+}
+.card h3{font-size:18px;margin:0 0 10px;color:var(--court-deep);}
+.help{font-size:13px;color:#5b6b70;margin:0 0 14px;line-height:1.5;}
+.empty{
+  border:1.5px dashed var(--line);border-radius:var(--radius);
+  padding:28px 16px;text-align:center;color:#6b7a80;font-size:14px;
+}
+
+/* Roster table */
+table.roster{width:100%;border-collapse:collapse;font-size:14px;}
+table.roster th{
+  text-align:left;font-family:'Barlow Condensed';font-weight:700;text-transform:uppercase;
+  font-size:12px;letter-spacing:0.05em;color:var(--court-mid);
+  border-bottom:2px solid var(--line);padding:6px 8px;
+}
+table.roster td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:middle;}
+table.roster tr:last-child td{border-bottom:none;}
+input[type=text],input[type=number],input[type=time],select,textarea{
+  font-family:'Inter';font-size:14px;padding:7px 9px;border:1px solid var(--line);
+  border-radius:7px;background:var(--chalk);color:var(--ink);
+}
+select{cursor:pointer;}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--court-mid);outline-offset:1px;}
+textarea{width:100%;min-height:110px;font-family:'ui-monospace',monospace;font-size:13px;resize:vertical;}
+
+.skillbadge{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:26px;height:26px;border-radius:50%;font-weight:700;font-size:13px;
+  font-family:'Barlow Condensed';color:#fff;
+}
+.skill-1{background:#8fb4c9;}
+.skill-2{background:var(--court-mid);}
+.skill-3{background:var(--court-deep);}
+
+button{
+  font-family:'Barlow Condensed';font-weight:700;text-transform:uppercase;letter-spacing:0.04em;
+  font-size:13px;border:none;border-radius:7px;padding:9px 16px;cursor:pointer;
+  transition:transform .08s, filter .1s;
+}
+button:active{transform:scale(0.97);}
+.btn-primary{background:var(--ball);color:var(--ink);}
+.btn-primary:hover{filter:brightness(0.95);}
+.btn-secondary{background:var(--court-pale);color:var(--court-deep);}
+.btn-secondary:hover{filter:brightness(0.96);}
+.btn-danger{background:transparent;color:var(--fault);border:1px solid var(--fault);}
+.btn-danger:hover{background:#fdeceA;}
+.btn-ghost{background:transparent;color:var(--court-mid);border:1px solid var(--line);}
+.btn-sm{padding:5px 10px;font-size:11px;}
+.row-actions{display:flex;gap:6px;}
+
+.field-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;}
+.field{display:flex;flex-direction:column;gap:4px;}
+.field label{font-size:11px;font-family:'Barlow Condensed';text-transform:uppercase;letter-spacing:0.04em;color:#6b7a80;}
+.err{color:var(--fault);font-size:13px;margin:4px 0 0;min-height:16px;}
+
+/* Week setup player list */
+.weekplayer{
+  display:grid;grid-template-columns:1fr 46px 150px 90px 34px;gap:8px;align-items:center;
+  padding:8px 4px;border-bottom:1px solid var(--line);font-size:14px;
+}
+.weekplayer:last-child{border-bottom:none;}
+.weekplayer .name{font-weight:600;}
+.colhead{font-family:'Barlow Condensed';font-size:11px;text-transform:uppercase;color:#6b7a80;letter-spacing:0.04em;}
+
+/* Court rows */
+.courtrow{
+  display:grid;grid-template-columns:26px 70px 1fr 1fr;gap:10px;align-items:center;
+  padding:7px 0;border-bottom:1px solid var(--line);
+}
+.courtrow:last-child{border-bottom:none;}
+.courtrow .clabel{font-weight:600;font-size:14px;}
+.courtrow input[type=checkbox]{width:18px;height:18px;}
+
+/* Round time inputs */
+.roundtimes-grid{display:flex;gap:16px;flex-wrap:wrap;}
+
+/* Matchups */
+.round-block{margin-bottom:26px;}
+.round-head{
+  display:flex;align-items:baseline;justify-content:space-between;
+  border-bottom:2px solid var(--ink);padding-bottom:6px;margin-bottom:12px;
+}
+.round-head .rnum{font-size:26px;font-weight:800;color:var(--court-deep);}
+.round-head .rlabel{font-size:13px;color:#6b7a80;font-family:'Inter';text-transform:none;letter-spacing:0;}
+.round-note{font-size:12px;color:#6b7a80;margin:-8px 0 12px;font-style:italic;}
+.matchups-intro{font-size:13px;color:#5b6b70;margin:-4px 0 18px;padding:10px 14px;background:var(--chalk-dim);border-radius:var(--radius);}
+
+.courts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;}
+.match-card{
+  background:#fff;border:1px solid var(--line);border-radius:var(--radius);
+  padding:12px 14px;position:relative;
+}
+.match-card .court-label{
+  font-family:'Barlow Condensed';font-weight:700;text-transform:uppercase;font-size:12px;
+  color:var(--court-mid);letter-spacing:0.05em;margin-bottom:8px;
+}
+.team{display:flex;flex-direction:column;gap:4px;padding:4px 0;}
+.net{
+  border-top:2px dashed var(--court-mid);position:relative;margin:2px 0;
+}
+.net::before{
+  content:'';position:absolute;left:-2px;top:-5px;width:9px;height:9px;border-radius:50%;
+  background:var(--ball);
+}
+.player-chip{
+  display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;
+  cursor:pointer;font-size:14px;font-weight:600;border:1.5px solid transparent;
+}
+.player-chip:hover{background:var(--chalk);}
+.player-chip.selected{border-color:var(--court-mid);background:var(--court-pale);}
+.match-card.invalid{border-color:var(--fault);}
+.match-card .flag{color:var(--fault);font-size:11px;font-family:'Inter';margin-top:6px;}
+
+.bench-box{
+  margin-top:10px;background:var(--chalk-dim);border-radius:var(--radius);padding:10px 14px;
+  font-size:13px;color:#5b6b70;
+}
+.bench-box b{color:var(--ink);}
+.bench-box .player-chip{font-weight:500;font-size:13px;}
+
+.toolbar{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;}
+.swap-hint{font-size:12px;color:#6b7a80;margin:-6px 0 16px;}
+
+/* Custom modal (native confirm/alert are blocked inside the artifact sandbox) */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(16,34,44,0.55);
+  display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;
+}
+.modal-box{
+  background:#fff;border-radius:var(--radius);padding:22px;max-width:380px;width:100%;
+  box-shadow:0 10px 30px rgba(0,0,0,0.25);
+}
+.modal-box p{font-size:14px;color:var(--ink);line-height:1.5;margin:0 0 18px;}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;}
+
+.toast{
+  position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+  background:var(--ink);color:#fff;padding:10px 18px;border-radius:8px;
+  font-size:13px;z-index:1000;box-shadow:0 6px 18px rgba(0,0,0,0.25);
+  max-width:min(90%,440px);text-align:left;line-height:1.4;
+}
+.toast.error{background:var(--fault);}
+
+/* Round totals strip */
+.round-totals{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+.round-total{
+  flex:1;min-width:80px;background:var(--chalk-dim);border-radius:var(--radius);
+  padding:8px 10px;text-align:center;
+}
+.round-total .rt-num{font-family:'Barlow Condensed';font-weight:800;font-size:22px;color:var(--court-deep);line-height:1;}
+.round-total .rt-label{font-size:11px;color:#6b7a80;text-transform:uppercase;letter-spacing:0.03em;margin-top:2px;}
+table.bulk{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;}
+table.bulk th{
+  text-align:left;font-family:'Barlow Condensed';font-weight:700;text-transform:uppercase;
+  font-size:11px;letter-spacing:0.04em;color:var(--court-mid);
+  border-bottom:2px solid var(--line);padding:5px 6px;
+}
+table.bulk td{padding:5px 6px;border-bottom:1px solid var(--line);}
+
+@media (max-width:520px){
+  .weekplayer{grid-template-columns:1fr 40px 120px 70px 30px;font-size:13px;}
+  .scoreboard .title{font-size:22px;}
+  .courtrow{grid-template-columns:22px 60px 1fr 1fr;}
+}
+</style>
+</head>
+<body>
+<!--
+  OPTIONAL SHARED SYNC (Firebase Firestore, free "Spark" tier, no credit card):
+  Leave the two script tags below in place. Once you've created a free
+  Firebase project (see the setup notes further down), paste your config
+  into FIREBASE_CONFIG in the main script block below and every organizer
+  who opens this same hosted page will read and write the same shared
+  roster/week data instead of each browser keeping its own separate copy.
+-->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<div id="app">
+
+  <div class="scoreboard">
+    <h1 class="title"><span class="dot"></span>Thursday Night Matchups</h1>
+    <div class="sub">Doubles pairings for however many show up, however many courts you've got.
+      <span id="saveStatus" style="float:right;font-size:11px;opacity:0.85;"></span>
+    </div>
+    <div class="tabs">
+      <div class="tab active" data-tab="roster">Roster</div>
+      <div class="tab" data-tab="week">This Week</div>
+      <div class="tab" data-tab="matchups">Matchups</div>
+    </div>
+  </div>
+
+  <main class="panel active" id="panel-roster"></main>
+  <main class="panel" id="panel-week"></main>
+  <main class="panel" id="panel-matchups"></main>
+
+</div>
+
+<script>
+/* ---------------------------------------------------------------------
+   STATE
+--------------------------------------------------------------------- */
+let roster = {};           // { name: skill(1|2|3) }
+
+function defaultWeek(){
+  return {
+    courts: [
+      { enabled:true,  start:"18:00", end:"21:00" },
+      { enabled:false, start:"18:00", end:"21:00" },
+      { enabled:false, start:"18:00", end:"21:00" },
+      { enabled:false, start:"18:00", end:"21:00" },
+    ],
+    roundTimes: { 1:"18:45", 2:"19:30", 3:"20:15" },
+    players: []   // [{ name, startRound(0-3), endRound(0-3) }]
+  };
+}
+let week = defaultWeek();
+let schedule = null;       // computed rounds (1,2,3 only)
+let swapSelection = null;  // {roundIdx, playerName}
+let bulkRawText = '';
+let bulkPreview = [];      // parsed rows from bulk import, ephemeral (not persisted)
+
+/* ---------------------------------------------------------------------
+   SHARED SYNC (optional) — Firebase Firestore, free tier
+   Leave FIREBASE_CONFIG as-is to use this app solo (data stays in this one
+   browser via localStorage, or in Claude's own storage inside an artifact).
+   To share data live across 2-3 organizers on different devices: create a
+   free Firebase project, enable Firestore, and paste your web app's config
+   object below in place of the placeholder. See the deployment notes for
+   the exact steps and the Firestore security rule to paste in.
+--------------------------------------------------------------------- */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD5B0i01BOizX53PdrMStXoNq8VUuKIkCI",
+  authDomain: "thursday-tennis.firebaseapp.com",
+  projectId: "thursday-tennis"
+};
+let useFirebase = false, db = null;
+try{
+  if(typeof firebase !== 'undefined' && FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf('PASTE')===-1){
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.firestore();
+    useFirebase = true;
+  }
+}catch(e){ console.error('Firebase init failed, falling back to local storage', e); }
+
+/* ---------------------------------------------------------------------
+   PERSISTENCE
+--------------------------------------------------------------------- */
+// Three backends, tried in this order: Firestore (if FIREBASE_CONFIG is filled
+// in, shared across every organizer/device) -> Claude's artifact storage API
+// (only present when this file is running inside a Claude artifact) -> plain
+// browser localStorage (solo fallback, e.g. before Firebase is set up).
+// A missing key throws (not just returns null), and a genuinely fresh key
+// looks identical to a transient backend hiccup. Retry a couple of times
+// before treating it as "nothing saved yet" so a blip doesn't silently
+// reset the roster or this week's list back to empty.
+async function readStorageWithRetry(key){
+  if(useFirebase){
+    try{
+      const snap = await db.collection('tennisApp').doc(key).get();
+      return snap.exists ? { key, value: snap.data().value } : null;
+    }catch(e){ console.error('Firestore read failed for', key, e); return null; }
+  }
+  if(!window.storage){
+    try{
+      const raw = localStorage.getItem('tennisApp_'+key);
+      return raw!=null ? { key, value: raw } : null;
+    }catch(e){ return null; }
+  }
+  const maxRetries = 2;
+  for(let attempt=0; attempt<=maxRetries; attempt++){
+    try{
+      return await window.storage.get(key, false);
+    }catch(e){
+      if(attempt<maxRetries) await new Promise(res=>setTimeout(res, 400*(attempt+1)));
+    }
+  }
+  return null;
+}
+async function loadState(){
+  const r = await readStorageWithRetry('roster');
+  if(r && r.value){
+    try{ roster = JSON.parse(r.value); }catch(e){ console.error('bad roster data', e); }
+  }
+  const w = await readStorageWithRetry('week');
+  if(w && w.value){
+    try{
+      const loaded = JSON.parse(w.value);
+      const base = defaultWeek();
+      week = {
+        courts: Array.isArray(loaded.courts) && loaded.courts.length===4 ? loaded.courts : base.courts,
+        roundTimes: Object.assign({}, base.roundTimes, loaded.roundTimes||{}),
+        players: Array.isArray(loaded.players) ? loaded.players : []
+      };
+    }catch(e){ console.error('bad week data', e); }
+  }
+}
+// Writes are queued one-at-a-time per key (never concurrent) and retried on
+// transient failure, so a rapid burst of edits can't spam the storage backend
+// and a single failed write can't wedge the app or lose in-memory changes.
+let rosterWriteQueue = Promise.resolve();
+let weekWriteQueue = Promise.resolve();
+
+function setSaveStatus(text, isError){
+  const el = document.getElementById('saveStatus');
+  if(!el) return;
+  el.textContent = text;
+  el.style.color = isError ? '#F2B8A6' : 'var(--court-pale)';
+}
+
+async function writeStorage(key, value){
+  if(useFirebase){
+    setSaveStatus('Saving\u2026', false);
+    try{
+      await db.collection('tennisApp').doc(key).set({ value, updatedAt: Date.now() });
+      setSaveStatus('Saved \u2014 shared', false);
+      return true;
+    }catch(e){
+      console.error('Firestore write failed for', key, e);
+      setSaveStatus('Couldn\u2019t save \u2014 check your connection', true);
+      return false;
+    }
+  }
+  if(!window.storage){
+    try{
+      localStorage.setItem('tennisApp_'+key, value);
+      setSaveStatus('Saved', false);
+      return true;
+    }catch(e){
+      console.error('localStorage set failed for', key, e);
+      setSaveStatus('Couldn\u2019t save to this browser', true);
+      return false;
+    }
+  }
+  setSaveStatus('Saving\u2026', false);
+  const maxRetries = 2;
+  for(let attempt=0; attempt<=maxRetries; attempt++){
+    try{
+      await window.storage.set(key, value, false);
+      setSaveStatus('Saved', false);
+      return true;
+    }catch(e){
+      console.error('storage set failed for', key, '(attempt '+(attempt+1)+')', e);
+      if(attempt<maxRetries) await new Promise(res=>setTimeout(res, 500*(attempt+1)));
+    }
+  }
+  setSaveStatus('Couldn\u2019t save \u2014 changes are kept for this session', true);
+  return false;
+}
+function saveRoster(){
+  rosterWriteQueue = rosterWriteQueue.then(()=> writeStorage('roster', JSON.stringify(roster)));
+  return rosterWriteQueue;
+}
+function saveWeek(){
+  weekWriteQueue = weekWriteQueue.then(()=> writeStorage('week', JSON.stringify(week)));
+  return weekWriteQueue;
+}
+
+/* ---------------------------------------------------------------------
+   TIME HELPERS
+--------------------------------------------------------------------- */
+function timeToMinutes(str){
+  if(!str) return null;
+  const parts = str.split(':');
+  if(parts.length<2) return null;
+  const h = parseInt(parts[0],10), m = parseInt(parts[1],10);
+  if(isNaN(h)||isNaN(m)) return null;
+  return h*60+m;
+}
+function formatTime12(str){
+  const mins = timeToMinutes(str);
+  if(mins==null) return '';
+  let h = Math.floor(mins/60), m = mins%60;
+  const period = h>=12 ? 'PM' : 'AM';
+  let hh = h%12; if(hh===0) hh=12;
+  return hh+':'+String(m).padStart(2,'0')+' '+period;
+}
+// Flexible parse of a hand-typed time like "6:30", "6:30pm", "5", "5pm" -> minutes since midnight.
+// Bare hours 1-7 with no am/pm are assumed PM (typical evening tennis start times).
+function parseTimeFlexible(str){
+  if(!str) return null;
+  str = str.trim().toLowerCase();
+  let m = str.match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/);
+  if(m){
+    let h=parseInt(m[1],10), mi=parseInt(m[2],10); const per=m[3];
+    if(per){ if(per==='pm'&&h<12)h+=12; if(per==='am'&&h===12)h=0; }
+    else if(h>=1 && h<=7){ h+=12; }
+    return h*60+mi;
+  }
+  m = str.match(/^(\d{1,2})\s*(am|pm)?$/);
+  if(m){
+    let h=parseInt(m[1],10); const per=m[2];
+    if(per){ if(per==='pm'&&h<12)h+=12; if(per==='am'&&h===12)h=0; }
+    else if(h>=1 && h<=7){ h+=12; }
+    return h*60;
+  }
+  return null;
+}
+function availableCourtsForRound(r){
+  const rt = week.roundTimes[r];
+  const rtm = timeToMinutes(rt);
+  if(rtm==null) return 0;
+  return week.courts.filter(c=>{
+    if(!c.enabled) return false;
+    const s = timeToMinutes(c.start), e = timeToMinutes(c.end);
+    if(s==null || e==null) return false;
+    return s<=rtm && rtm<e;
+  }).length;
+}
+function startRoundOptionsHtml(selected){
+  let html = `<option value="0" ${selected===0?'selected':''}>Rd 0 (informal)</option>`;
+  for(let r=1;r<=3;r++){
+    const t = week.roundTimes[r] ? ' \u2013 '+formatTime12(week.roundTimes[r]) : '';
+    html += `<option value="${r}" ${selected===r?'selected':''}>Rd ${r}${t}</option>`;
+  }
+  return html;
+}
+function endRoundOptionsHtml(startRound, selected){
+  let html = '';
+  for(let r=startRound; r<=3; r++){
+    const t = week.roundTimes[r] ? ' \u2013 '+formatTime12(week.roundTimes[r]) : (r===0?' (informal)':'');
+    html += `<option value="${r}" ${selected===r?'selected':''}>Rd ${r}${t}</option>`;
+  }
+  return html;
+}
+// The sensible default for how long someone plays when it isn't stated explicitly:
+// arriving only for the informal round (0) implies leaving after it; arriving for
+// any scheduled round implies playing through the last scheduled round (3).
+function defaultEndRound(startRound){
+  return startRound===0 ? 0 : 3;
+}
+// How many of tonight's players are in the mix for each round (0-3), using the
+// same startRound<=r<=endRound rule the scheduler itself uses.
+function roundTotals(){
+  const totals = {0:0,1:0,2:0,3:0};
+  week.players.forEach(p=>{
+    for(let r=0;r<=3;r++){
+      if(p.startRound<=r && r<=p.endRound) totals[r]++;
+    }
+  });
+  return totals;
+}
+
+/* ---------------------------------------------------------------------
+   IN-APP DIALOGS
+   (native confirm()/alert() are silently blocked in the artifact sandbox,
+   so destructive actions and notices use these instead.)
+--------------------------------------------------------------------- */
+function showConfirm(message, confirmLabel){
+  confirmLabel = confirmLabel || 'Confirm';
+  return new Promise(resolve=>{
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal-box">
+        <p>${escapeHtml(message)}</p>
+        <div class="modal-actions">
+          <button class="btn-ghost" id="modalCancel">Cancel</button>
+          <button class="btn-danger" id="modalConfirm">${escapeHtml(confirmLabel)}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const cleanup = (result)=>{ overlay.remove(); resolve(result); };
+    overlay.querySelector('#modalCancel').addEventListener('click', ()=>cleanup(false));
+    overlay.querySelector('#modalConfirm').addEventListener('click', ()=>cleanup(true));
+    overlay.addEventListener('click', (e)=>{ if(e.target===overlay) cleanup(false); });
+  });
+}
+function showToast(message, isError){
+  const t = document.createElement('div');
+  t.className = 'toast'+(isError?' error':'');
+  t.textContent = message;
+  document.body.appendChild(t);
+  setTimeout(()=>{ t.remove(); }, 3800);
+}
+
+/* ---------------------------------------------------------------------
+   TABS
+--------------------------------------------------------------------- */
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click', ()=> showTab(t.dataset.tab));
+});
+function showTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active', p.id==='panel-'+name));
+}
+
+/* ---------------------------------------------------------------------
+   ROSTER TAB
+--------------------------------------------------------------------- */
+function renderRoster(){
+  const el = document.getElementById('panel-roster');
+  const names = Object.keys(roster).sort((a,b)=>a.localeCompare(b));
+  let rows = names.map(name=>`
+    <tr>
+      <td class="name">${escapeHtml(name)}</td>
+      <td>
+        <select data-roster-skill="${escapeHtml(name)}">
+          <option value="1" ${roster[name]===1?'selected':''}>1</option>
+          <option value="2" ${roster[name]===2?'selected':''}>2</option>
+          <option value="3" ${roster[name]===3?'selected':''}>3</option>
+        </select>
+      </td>
+      <td class="row-actions">
+        <button class="btn-danger btn-sm" data-roster-remove="${escapeHtml(name)}">Remove</button>
+      </td>
+    </tr>`).join('');
+
+  el.innerHTML = `
+    <div class="card">
+      <h3>Player roster &amp; skill levels</h3>
+      <p class="help">Set each player's skill level once&mdash;1, 2, or 3. It carries over week to week automatically. Only touch this again if someone's game genuinely moves up or down (a couple times a year, tops).</p>
+      ${names.length===0 ? `<div class="empty">No players yet. Add your first one below.</div>` : `
+      <table class="roster">
+        <thead><tr><th>Name</th><th>Skill</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`}
+    </div>
+    <div class="card">
+      <h3>Add a player</h3>
+      <div class="field-row">
+        <div class="field">
+          <label>Name</label>
+          <input type="text" id="newRosterName" placeholder="e.g. Dave">
+        </div>
+        <div class="field">
+          <label>Skill (1&ndash;3)</label>
+          <select id="newRosterSkill">
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+            <option value="3">3</option>
+          </select>
+        </div>
+        <button class="btn-primary" id="addRosterBtn">Add player</button>
+      </div>
+      <p class="err" id="rosterErr"></p>
+    </div>
+  `;
+
+  el.querySelectorAll('[data-roster-skill]').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const name = sel.getAttribute('data-roster-skill');
+      roster[name] = parseInt(sel.value,10);
+      await saveRoster();
+    });
+  });
+  el.querySelectorAll('[data-roster-remove]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const name = btn.getAttribute('data-roster-remove');
+      const ok = await showConfirm(`Remove ${name} from the roster? (They'll stay on this week's list if already added, but won't autofill next time.)`, 'Remove');
+      if(!ok) return;
+      delete roster[name];
+      await saveRoster();
+      renderRoster();
+    });
+  });
+  document.getElementById('addRosterBtn').addEventListener('click', async ()=>{
+    const nameInput = document.getElementById('newRosterName');
+    const name = nameInput.value.trim();
+    const errEl = document.getElementById('rosterErr');
+    if(!name){ errEl.textContent='Enter a name.'; return; }
+    if(roster[name]!==undefined){ errEl.textContent=`${name} is already on the roster.`; return; }
+    errEl.textContent='';
+    roster[name] = parseInt(document.getElementById('newRosterSkill').value,10);
+    await saveRoster();
+    renderRoster();
+  });
+}
+
+/* ---------------------------------------------------------------------
+   THIS WEEK TAB
+--------------------------------------------------------------------- */
+function renderWeek(){
+  const el = document.getElementById('panel-week');
+  const rosterNames = Object.keys(roster).sort((a,b)=>a.localeCompare(b));
+  const weekNames = new Set(week.players.map(p=>p.name));
+  const availableToAdd = rosterNames.filter(n=>!weekNames.has(n));
+
+  const courtRows = week.courts.map((c,idx)=>`
+    <div class="courtrow">
+      <input type="checkbox" data-court-enabled="${idx}" ${c.enabled?'checked':''}>
+      <div class="clabel">Court ${idx+1}</div>
+      <div class="field"><label>Start</label><input type="time" data-court-start="${idx}" value="${c.start}"></div>
+      <div class="field"><label>End</label><input type="time" data-court-end="${idx}" value="${c.end}"></div>
+    </div>`).join('');
+
+  const roundTimeInputs = [1,2,3].map(r=>`
+    <div class="field">
+      <label>Round ${r} starts</label>
+      <input type="time" data-roundtime="${r}" value="${week.roundTimes[r]||''}">
+    </div>`).join('');
+
+  const rows = week.players.map((p,idx)=>{
+    const skill = roster[p.name] !== undefined ? roster[p.name] : 2;
+    return `
+    <div class="weekplayer">
+      <div class="name">${escapeHtml(p.name)}</div>
+      <div><span class="skillbadge skill-${skill}">${skill}</span></div>
+      <select data-week-start="${idx}">${startRoundOptionsHtml(p.startRound)}</select>
+      <select data-week-end="${idx}">${endRoundOptionsHtml(p.startRound, p.endRound)}</select>
+      <button class="btn-danger btn-sm" data-week-remove="${idx}">&times;</button>
+    </div>`;
+  }).join('');
+
+  const bulkPreviewHtml = bulkPreview.length===0 ? '' : `
+    <table class="bulk">
+      <thead><tr><th></th><th>Name</th><th>Status</th><th>Start</th><th>End round</th><th>Note</th></tr></thead>
+      <tbody>
+        ${bulkPreview.map((item,idx)=>`
+          <tr>
+            <td><input type="checkbox" data-bulk-idx="${idx}" ${item.include?'checked':''}></td>
+            <td>${escapeHtml(item.name)}</td>
+            <td>${item.playing?'Playing':'Not playing'}</td>
+            <td>${item.startRound!=null? ('Rd '+item.startRound) : '\u2014'}</td>
+            <td>${item.endRound!=null? ('Rd '+item.endRound) : '\u2014'}</td>
+            <td style="color:var(--fault);font-size:12px;">${item.note?escapeHtml(item.note):''}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+    <div class="field-row" style="margin-top:12px;">
+      <button class="btn-primary" id="bulkAddBtn">Add checked players</button>
+      <button class="btn-ghost" id="bulkCancelBtn">Discard</button>
+    </div>
+  `;
+
+  el.innerHTML = `
+    <div class="card">
+      <h3>Courts tonight</h3>
+      <p class="help">Turn on up to 4 courts and set when each one is actually available. A round only uses the courts that are open during that round's start time.</p>
+      ${courtRows}
+    </div>
+
+    <div class="card">
+      <h3>Round start times</h3>
+      <p class="help">Round 0 is first-come-first-served on whatever's free early &mdash; this app doesn't schedule it. Rounds 1&ndash;3 get matched here, so give them real start times to check against court availability above.</p>
+      <div class="roundtimes-grid">${roundTimeInputs}</div>
+    </div>
+
+    <div class="card">
+      <h3>Who's playing</h3>
+      ${week.players.length===0 ? `<div class="empty">Nobody added yet for tonight. Add players below, or paste in from your sign-up sheet.</div>` : (()=>{
+        const totals = roundTotals();
+        return `
+      <div class="round-totals">
+        ${[0,1,2,3].map(r=>`
+          <div class="round-total">
+            <div class="rt-num">${totals[r]}</div>
+            <div class="rt-label">Rd ${r}${r===0?' (informal)':''}</div>
+          </div>`).join('')}
+      </div>
+      <div class="weekplayer" style="border-bottom:2px solid var(--line);padding-bottom:6px;">
+        <div class="colhead">Name</div>
+        <div class="colhead">Skill</div>
+        <div class="colhead">Start</div>
+        <div class="colhead">End round</div>
+        <div></div>
+      </div>
+      ${rows}`;
+      })()}
+    </div>
+
+    <div class="card">
+      <h3>Add a player to tonight</h3>
+      <div class="field-row">
+        <div class="field">
+          <label>Player</label>
+          <input type="text" id="weekPlayerName" list="rosterList" placeholder="Type or pick a name">
+          <datalist id="rosterList">
+            ${availableToAdd.map(n=>`<option value="${escapeHtml(n)}">`).join('')}
+          </datalist>
+        </div>
+        <div class="field" id="newSkillField">
+          <label>Skill (new players only)</label>
+          <select id="weekPlayerSkill">
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+            <option value="3">3</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Start round</label>
+          <select id="weekPlayerStart">${startRoundOptionsHtml(0)}</select>
+        </div>
+        <div class="field">
+          <label>End round</label>
+          <select id="weekPlayerEnd">${endRoundOptionsHtml(0, defaultEndRound(0))}</select>
+        </div>
+        <button class="btn-primary" id="addWeekPlayerBtn">Add to tonight</button>
+      </div>
+      <p class="err" id="weekErr"></p>
+    </div>
+
+    <div class="card">
+      <h3>Paste from your sign-up sheet</h3>
+      <p class="help">Select the name column plus the two True/False columns in Google Sheets and copy &mdash; then paste below, one player per line (tab or comma separated). Format: <code>Name, [TRUE/FALSE for Round 1], [TRUE/FALSE for Round 0]</code>. If column 2 is TRUE, they're mapped to Round 1 (and assumed to play through Round 3). If column 2 is FALSE and column 3 is TRUE, they're mapped to Round 0 only (the informal round, not scheduled here). If both are FALSE, they're skipped as not playing. End round isn't read from the paste &mdash; adjust it afterward in the list below if someone's leaving early. Any header row (e.g. "Name, In/Out") is ignored automatically.</p>
+      <textarea id="bulkText" placeholder="Dave, TRUE, FALSE
+Steve, FALSE, FALSE
+Rich, FALSE, TRUE">${escapeHtml(bulkRawText)}</textarea>
+      <div class="field-row" style="margin-top:10px;">
+        <button class="btn-secondary" id="bulkParseBtn">Parse</button>
+      </div>
+      ${bulkPreviewHtml}
+    </div>
+
+    <div class="field-row">
+      <button class="btn-primary" id="generateBtn" style="padding:12px 22px;font-size:14px;">Generate matchups</button>
+      <button class="btn-ghost" id="clearWeekBtn">Clear tonight's list</button>
+    </div>
+  `;
+
+  // Courts
+  el.querySelectorAll('[data-court-enabled]').forEach(cb=>{
+    cb.addEventListener('change', async (e)=>{
+      week.courts[parseInt(e.target.getAttribute('data-court-enabled'),10)].enabled = e.target.checked;
+      await saveWeek();
+    });
+  });
+  el.querySelectorAll('[data-court-start]').forEach(inp=>{
+    inp.addEventListener('change', async (e)=>{
+      week.courts[parseInt(e.target.getAttribute('data-court-start'),10)].start = e.target.value;
+      await saveWeek();
+    });
+  });
+  el.querySelectorAll('[data-court-end]').forEach(inp=>{
+    inp.addEventListener('change', async (e)=>{
+      week.courts[parseInt(e.target.getAttribute('data-court-end'),10)].end = e.target.value;
+      await saveWeek();
+    });
+  });
+  // Round times
+  el.querySelectorAll('[data-roundtime]').forEach(inp=>{
+    inp.addEventListener('change', async (e)=>{
+      week.roundTimes[parseInt(e.target.getAttribute('data-roundtime'),10)] = e.target.value;
+      await saveWeek();
+      renderWeek(); // refresh dependent start-round labels
+    });
+  });
+  // Player rows
+  el.querySelectorAll('[data-week-start]').forEach(sel=>{
+    sel.addEventListener('change', async (e)=>{
+      const idx = parseInt(e.target.getAttribute('data-week-start'),10);
+      const newStart = parseInt(e.target.value,10);
+      week.players[idx].startRound = newStart;
+      if(week.players[idx].endRound < newStart) week.players[idx].endRound = defaultEndRound(newStart);
+      await saveWeek();
+      renderWeek();
+    });
+  });
+  el.querySelectorAll('[data-week-end]').forEach(sel=>{
+    sel.addEventListener('change', async (e)=>{
+      const idx = parseInt(e.target.getAttribute('data-week-end'),10);
+      week.players[idx].endRound = parseInt(e.target.value,10);
+      await saveWeek();
+    });
+  });
+  el.querySelectorAll('[data-week-remove]').forEach(btn=>{
+    btn.addEventListener('click', async (e)=>{
+      const idx = parseInt(e.target.getAttribute('data-week-remove'),10);
+      week.players.splice(idx,1);
+      await saveWeek();
+      renderWeek();
+    });
+  });
+
+  // Add player
+  const nameInput = document.getElementById('weekPlayerName');
+  const newSkillField = document.getElementById('newSkillField');
+  nameInput.addEventListener('input', ()=>{
+    const exists = roster[nameInput.value.trim()] !== undefined;
+    newSkillField.style.display = exists ? 'none' : 'flex';
+  });
+  document.getElementById('weekPlayerStart').addEventListener('change', (e)=>{
+    const s = parseInt(e.target.value,10);
+    const endSel = document.getElementById('weekPlayerEnd');
+    endSel.innerHTML = endRoundOptionsHtml(s, defaultEndRound(s));
+  });
+  document.getElementById('addWeekPlayerBtn').addEventListener('click', async ()=>{
+    const errEl = document.getElementById('weekErr');
+    const name = nameInput.value.trim();
+    if(!name){ errEl.textContent='Enter a player name.'; return; }
+    if(week.players.some(p=>p.name.toLowerCase()===name.toLowerCase())){
+      errEl.textContent = `${name} is already on tonight's list.`; return;
+    }
+    errEl.textContent='';
+    if(roster[name] === undefined){
+      roster[name] = parseInt(document.getElementById('weekPlayerSkill').value,10);
+      await saveRoster();
+    }
+    const startRound = parseInt(document.getElementById('weekPlayerStart').value,10);
+    const endRound = parseInt(document.getElementById('weekPlayerEnd').value,10);
+    week.players.push({ name, startRound, endRound });
+    await saveWeek();
+    renderWeek();
+  });
+
+  document.getElementById('clearWeekBtn').addEventListener('click', async ()=>{
+    const ok = await showConfirm("Clear everyone from tonight's list? Skill levels on the roster are unaffected.", 'Clear list');
+    if(!ok) return;
+    week.players = [];
+    await saveWeek();
+    renderWeek();
+  });
+
+  document.getElementById('generateBtn').addEventListener('click', ()=>{
+    if(week.players.length===0){ showToast("Add at least a few players first.", true); return; }
+    schedule = computeSchedule();
+    renderMatchups();
+    showTab('matchups');
+  });
+
+  // Bulk import
+  document.getElementById('bulkParseBtn').addEventListener('click', ()=>{
+    bulkRawText = document.getElementById('bulkText').value;
+    bulkPreview = parseBulkText(bulkRawText);
+    renderWeek();
+  });
+  const bulkAddBtn = document.getElementById('bulkAddBtn');
+  if(bulkAddBtn){
+    bulkAddBtn.addEventListener('click', async ()=>{
+      const checkboxes = document.querySelectorAll('input[data-bulk-idx]');
+      let added=0, skippedDup=0, skippedInvalid=0; const newRosterNames=[];
+      checkboxes.forEach(cb=>{
+        if(!cb.checked) return;
+        const idx = parseInt(cb.getAttribute('data-bulk-idx'),10);
+        const item = bulkPreview[idx];
+        if(!item || item.startRound==null){ skippedInvalid++; return; }
+        if(week.players.some(p=>p.name.toLowerCase()===item.name.toLowerCase())){ skippedDup++; return; }
+        if(roster[item.name]===undefined){ roster[item.name]=2; newRosterNames.push(item.name); }
+        week.players.push({ name:item.name, startRound:item.startRound, endRound:item.endRound });
+        added++;
+      });
+      await saveRoster(); await saveWeek();
+      bulkRawText=''; bulkPreview=[];
+      renderWeek();
+      let msg = `Added ${added} player(s).`;
+      if(skippedDup) msg += ` Skipped ${skippedDup} already on tonight's list.`;
+      if(skippedInvalid) msg += ` Skipped ${skippedInvalid} that couldn't be mapped to a round.`;
+      if(newRosterNames.length) msg += ` New to roster with default skill 2 \u2014 adjust in the Roster tab: ${newRosterNames.join(', ')}.`;
+      showToast(msg);
+    });
+  }
+  const bulkCancelBtn = document.getElementById('bulkCancelBtn');
+  if(bulkCancelBtn){
+    bulkCancelBtn.addEventListener('click', ()=>{
+      bulkRawText=''; bulkPreview=[];
+      renderWeek();
+    });
+  }
+}
+
+// Parse pasted sign-up sheet rows into candidate player entries.
+// Recognize True/False (also Yes/No, In/Out, 1/0) in a cell. Returns true/false/null (unknown).
+// Strict TRUE/FALSE only. Deliberately does NOT treat "In"/"Out" as synonyms:
+// some sheets carry a real In/Out status column alongside the two time
+// checkboxes, and if that status column landed in the same spot we scan for
+// a checkbox, "In" would get misread as a checked time slot.
+function parseBool(str){
+  if(str==null) return null;
+  const s = String(str).trim().toLowerCase();
+  if(s==='true') return true;
+  if(s==='false') return false;
+  return null;
+}
+// Header rows (e.g. "Name, In/Out") sometimes get swept up in a copy-paste. Anything
+// whose first cell reads like a column label rather than a person's name is dropped.
+const BULK_HEADER_NAMES = ['name','player','players','in/out','in / out','status'];
+
+function parseBulkText(text){
+  const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>0);
+  return lines.map(line=>{
+    const cols = line.split(/\t|,/).map(c=>c.trim());
+    const name = cols[0] || '';
+    if(BULK_HEADER_NAMES.includes(name.toLowerCase())) return null; // header row, ignore entirely
+
+    // Some sheets paste an extra In/Out status column alongside the two time
+    // checkboxes. Rather than assume a fixed column position, scan every cell
+    // after the name for ones that actually read TRUE/FALSE and take the first
+    // two, in order — any status text ("In"/"Out") in between is ignored.
+    const boolCells = cols.slice(1).filter(c => parseBool(c) !== null);
+    const col2 = boolCells.length>0 ? parseBool(boolCells[0]) : null;
+    const col3 = boolCells.length>1 ? parseBool(boolCells[1]) : null;
+
+    let startRound = null, playing = false, note = '';
+    if(col2 === true){
+      startRound = 1; playing = true;
+    } else if(col2 === false && col3 === true){
+      startRound = 0; playing = true;
+    } else if(col2 === false && col3 === false){
+      playing = false;
+    } else {
+      // couldn't read one or both columns as True/False
+      playing = false;
+      note = `Couldn't read True/False in "${cols[1]||''}" / "${cols[2]||''}" \u2014 skipped.`;
+    }
+
+    // End round never comes from the paste: Round 0 starters default to leaving
+    // after Round 0; anyone starting on a scheduled round defaults to playing
+    // through the last scheduled round.
+    const endRound = startRound===null ? null : defaultEndRound(startRound);
+
+    return {
+      name, playing, startRound, endRound, note,
+      include: playing && startRound!==null && !!name
+    };
+  }).filter(r=>r && r.name);
+}
+
+/* ---------------------------------------------------------------------
+   SCHEDULING ALGORITHM
+--------------------------------------------------------------------- */
+function chunk4(arr){
+  const groups=[];
+  for(let i=0;i+4<=arr.length;i+=4) groups.push(arr.slice(i,i+4));
+  return groups;
+}
+function sortByFairness(players, playedCount){
+  return players.slice().sort((a,b)=>{
+    const pa = playedCount[a.name]||0, pb = playedCount[b.name]||0;
+    if(pa!==pb) return pa-pb;
+    return Math.random()-0.5;
+  });
+}
+function scheduleRound(eligible, maxSlots, restricted, playedCount){
+  const sorted = sortByFairness(eligible, playedCount);
+  const capped = sorted.slice(0, maxSlots);
+  let hardBench = sorted.slice(maxSlots);
+  let groups = [];
+  let leftoverPools = [];
+
+  if(restricted){
+    const b1 = capped.filter(p=>p.skill===1);
+    const b2 = capped.filter(p=>p.skill===2);
+    const b3 = capped.filter(p=>p.skill===3);
+    let bestX=0, bestTotal=-1;
+    for(let x=0; x<=b2.length; x++){
+      const total = Math.floor((b1.length+x)/4)*4 + Math.floor((b3.length+(b2.length-x))/4)*4;
+      if(total>bestTotal){ bestTotal=total; bestX=x; }
+    }
+    const lowPool = b1.concat(b2.slice(0,bestX));
+    const highPool = b3.concat(b2.slice(bestX));
+    const lowGroups = chunk4(lowPool);
+    const highGroups = chunk4(highPool);
+    groups = lowGroups.concat(highGroups);
+    leftoverPools = [
+      { players: lowPool.slice(lowGroups.length*4), filter: p=>p.skill===1||p.skill===2 },
+      { players: highPool.slice(highGroups.length*4), filter: p=>p.skill===2||p.skill===3 },
+    ];
+  } else {
+    const playable = Math.floor(capped.length/4)*4;
+    groups = chunk4(capped.slice(0,playable));
+    leftoverPools = [{ players: capped.slice(playable), filter: ()=>true }];
+  }
+
+  const finalLeftover = [];
+  for(const pool of leftoverPools){
+    const need = pool.players.length===0 ? 0 : (4 - pool.players.length);
+    if(need>0 && need<=hardBench.length){
+      const cands = hardBench.filter(pool.filter);
+      if(cands.length>=need){
+        const added = cands.slice(0,need);
+        groups.push(pool.players.concat(added));
+        hardBench = hardBench.filter(p=>!added.includes(p));
+        continue;
+      }
+    }
+    finalLeftover.push(...pool.players);
+  }
+  const sittingOut = finalLeftover.concat(hardBench);
+  return { groups, sittingOut };
+}
+function computeSchedule(){
+  const players = week.players.map(p=>({
+    name: p.name,
+    skill: roster[p.name] !== undefined ? roster[p.name] : 2,
+    startRound: p.startRound,
+    endRound: p.endRound
+  }));
+  const playedCount = {};
+  players.forEach(p=> playedCount[p.name]=0);
+  const rounds = [];
+  for(let r=1; r<=3; r++){
+    const eligible = players.filter(p=> p.startRound<=r && r<=p.endRound);
+    const restricted = (r===1 || r===2);
+    const courtsAvailable = availableCourtsForRound(r);
+    const maxSlots = courtsAvailable*4;
+    const { groups, sittingOut } = scheduleRound(eligible, maxSlots, restricted, playedCount);
+    groups.forEach(g=> g.forEach(p=> playedCount[p.name]=(playedCount[p.name]||0)+1));
+    rounds.push({
+      round:r,
+      timeLabel: week.roundTimes[r] ? formatTime12(week.roundTimes[r]) : '',
+      restricted,
+      courtsAvailable,
+      groups: groups.map(g=>({ players:g, teams: splitTeams(g) })),
+      sittingOut
+    });
+  }
+  return rounds;
+}
+function splitTeams(group){
+  const shuffled = group.slice().sort(()=>Math.random()-0.5);
+  return [shuffled.slice(0,2), shuffled.slice(2,4)];
+}
+
+/* ---------------------------------------------------------------------
+   MATCHUPS TAB
+--------------------------------------------------------------------- */
+function renderMatchups(){
+  const el = document.getElementById('panel-matchups');
+  if(!schedule){
+    el.innerHTML = `<div class="empty">No matchups yet. Head to "This Week", add your players, and hit Generate.</div>`;
+    return;
+  }
+  const roundNotes = {
+    1: "Skill-matched \u2014 everyone in a match is within one skill level of each other.",
+    2: "Skill-matched \u2014 everyone in a match is within one skill level of each other.",
+    3: "Open round \u2014 no skill restriction."
+  };
+
+  let html = `
+    <div class="matchups-intro">Round 0 is played informally on whoever's court is free first \u2014 not scheduled here.</div>
+    <div class="toolbar">
+      <button class="btn-primary" id="regenBtn">Regenerate</button>
+      <button class="btn-secondary" id="copyBtn">Copy summary</button>
+    </div>
+    <p class="swap-hint">Click a player, then click another player <em>in the same round</em> to swap them.</p>
+  `;
+
+  schedule.forEach((rd, ridx)=>{
+    html += `<div class="round-block">
+      <div class="round-head">
+        <div class="rnum">ROUND ${rd.round}</div>
+        <div class="rlabel">${rd.timeLabel ? rd.timeLabel+' \u2014 ' : ''}${rd.courtsAvailable} court${rd.courtsAvailable===1?'':'s'} available</div>
+      </div>
+      <div class="round-note">${roundNotes[rd.round]}</div>
+      <div class="courts-grid">`;
+
+    if(rd.groups.length===0){
+      html += `<div class="empty">No full matches this round.</div>`;
+    }
+
+    rd.groups.forEach((g, gidx)=>{
+      const invalid = rd.restricted && !isGroupValid(g.players);
+      html += `<div class="match-card ${invalid?'invalid':''}">
+        <div class="court-label">Court ${gidx+1}</div>
+        ${teamHtml(g.teams[0], ridx, gidx)}
+        <div class="net"></div>
+        ${teamHtml(g.teams[1], ridx, gidx)}
+        ${invalid ? `<div class="flag">\u26A0 skill levels more than 1 apart (manual override)</div>` : ''}
+      </div>`;
+    });
+
+    html += `</div>`;
+
+    if(rd.sittingOut.length>0){
+      html += `<div class="bench-box"><b>Sitting out this round:</b> ${
+        rd.sittingOut.map(p=>playerChipHtml(p, ridx)).join(' ')
+      }</div>`;
+    }
+    html += `</div>`;
+  });
+
+  el.innerHTML = html;
+
+  el.querySelectorAll('.player-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=> handleChipClick(chip));
+  });
+  document.getElementById('regenBtn').addEventListener('click', ()=>{
+    schedule = computeSchedule();
+    swapSelection = null;
+    renderMatchups();
+  });
+  document.getElementById('copyBtn').addEventListener('click', copySummary);
+}
+
+function teamHtml(team, ridx, gidx){
+  return `<div class="team">${team.map(p=>playerChipHtml(p, ridx)).join('')}</div>`;
+}
+function playerChipHtml(p, ridx){
+  const sel = swapSelection && swapSelection.roundIdx===ridx && swapSelection.playerName===p.name;
+  return `<span class="player-chip ${sel?'selected':''}"
+      data-round="${ridx}" data-name="${escapeHtml(p.name)}">
+      <span class="skillbadge skill-${p.skill}" style="width:18px;height:18px;font-size:10px;">${p.skill}</span>
+      ${escapeHtml(p.name)}
+    </span>`;
+}
+function isGroupValid(players){
+  const skills = players.map(p=>p.skill);
+  return (Math.max(...skills) - Math.min(...skills)) <= 1;
+}
+
+function findPlayerLocation(roundIdx, name){
+  const rd = schedule[roundIdx];
+  for(let gi=0; gi<rd.groups.length; gi++){
+    for(let ti=0; ti<2; ti++){
+      const idx = rd.groups[gi].teams[ti].findIndex(p=>p.name===name);
+      if(idx>-1) return { loc:'group', gidx:gi, tidx:ti, idx };
+    }
+  }
+  const bidx = rd.sittingOut.findIndex(p=>p.name===name);
+  if(bidx>-1) return { loc:'bench', idx:bidx };
+  return null;
+}
+function handleChipClick(chip){
+  const ridx = parseInt(chip.getAttribute('data-round'),10);
+  const name = chip.getAttribute('data-name');
+
+  if(!swapSelection){
+    swapSelection = { roundIdx: ridx, playerName: name };
+    renderMatchups();
+    return;
+  }
+  if(swapSelection.roundIdx !== ridx){
+    swapSelection = { roundIdx: ridx, playerName: name };
+    renderMatchups();
+    return;
+  }
+  if(swapSelection.playerName === name){
+    swapSelection = null;
+    renderMatchups();
+    return;
+  }
+  const rd = schedule[ridx];
+  const locA = findPlayerLocation(ridx, swapSelection.playerName);
+  const locB = findPlayerLocation(ridx, name);
+  if(!locA || !locB){ swapSelection=null; renderMatchups(); return; }
+
+  const getRef = (loc)=>{
+    if(loc.loc==='group') return rd.groups[loc.gidx].teams[loc.tidx];
+    return rd.sittingOut;
+  };
+  const arrA = getRef(locA), arrB = getRef(locB);
+  const tmp = arrA[locA.idx];
+  arrA[locA.idx] = arrB[locB.idx];
+  arrB[locB.idx] = tmp;
+
+  rd.groups.forEach(g=>{ g.players = g.teams[0].concat(g.teams[1]); });
+
+  swapSelection = null;
+  renderMatchups();
+}
+
+function copySummary(){
+  const dateStr = new Date().toLocaleDateString(undefined, { weekday:'long', month:'short', day:'numeric' });
+  let text = `Thursday Night Matchups \u2014 ${dateStr}\n(Round 0 not included \u2014 first-come-first-served)\n\n`;
+  schedule.forEach(rd=>{
+    text += `ROUND ${rd.round}${rd.timeLabel?' ('+rd.timeLabel+')':''}\n`;
+    rd.groups.forEach((g,i)=>{
+      text += `  Court ${i+1}: ${g.teams[0].map(p=>p.name).join(' & ')}  vs  ${g.teams[1].map(p=>p.name).join(' & ')}\n`;
+    });
+    if(rd.sittingOut.length>0){
+      text += `  Sitting out: ${rd.sittingOut.map(p=>p.name).join(', ')}\n`;
+    }
+    text += `\n`;
+  });
+
+  const doFallback = ()=>{
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); }catch(e){}
+    document.body.removeChild(ta);
+    flashCopyBtn();
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(flashCopyBtn).catch(doFallback);
+  } else {
+    doFallback();
+  }
+}
+function flashCopyBtn(){
+  const btn = document.getElementById('copyBtn');
+  if(!btn) return;
+  const orig = btn.textContent;
+  btn.textContent = 'Copied!';
+  setTimeout(()=>{ btn.textContent = orig; }, 1400);
+}
+
+/* ---------------------------------------------------------------------
+   UTIL
+--------------------------------------------------------------------- */
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+/* ---------------------------------------------------------------------
+   INIT
+--------------------------------------------------------------------- */
+(async function init(){
+  await loadState();
+  renderRoster();
+  renderWeek();
+  renderMatchups();
+})();
+</script>
+</body>
+</html>
