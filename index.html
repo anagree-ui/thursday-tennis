@@ -304,9 +304,9 @@ let bulkPreview = [];      // parsed rows from bulk import, ephemeral (not persi
    the exact steps and the Firestore security rule to paste in.
 --------------------------------------------------------------------- */
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyD5B0i01BOizX53PdrMStXoNq8VUuKIkCI",
-  authDomain: "thursday-tennis.firebaseapp.com",
-  projectId: "thursday-tennis"
+  apiKey: "PASTE_YOUR_API_KEY",
+  authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
+  projectId: "PASTE_YOUR_PROJECT_ID"
 };
 let useFirebase = false, db = null;
 try{
@@ -1051,6 +1051,7 @@ function computeSchedule(){
   }));
   const playedCount = {};
   players.forEach(p=> playedCount[p.name]=0);
+  const partnerHistory = new Set(); // pairs already teamed together tonight, filled in as rounds are built
   const rounds = [];
   for(let r=1; r<=3; r++){
     const eligible = players.filter(p=> p.startRound<=r && r<=p.endRound);
@@ -1064,15 +1065,54 @@ function computeSchedule(){
       timeLabel: week.roundTimes[r] ? formatTime12(week.roundTimes[r]) : '',
       restricted,
       courtsAvailable,
-      groups: groups.map(g=>({ players:g, teams: splitTeams(g) })),
+      groups: groups.map(g=>({ players:g, teams: splitTeams(g, partnerHistory) })),
       sittingOut
     });
   }
   return rounds;
 }
-function splitTeams(group){
-  const shuffled = group.slice().sort(()=>Math.random()-0.5);
-  return [shuffled.slice(0,2), shuffled.slice(2,4)];
+function pairKey(nameA, nameB){
+  return [nameA, nameB].sort().join('::');
+}
+// Splits a group of 4 into two teams of 2, preferring whichever of the 3
+// possible pairings hasn't already teamed up tonight (per partnerHistory).
+// Falls back to the pairing with the fewest repeats if all three have one.
+function splitTeams(group, partnerHistory){
+  partnerHistory = partnerHistory || new Set();
+  const [a,b,c,d] = group;
+  const partitions = [
+    [[a,b],[c,d]],
+    [[a,c],[b,d]],
+    [[a,d],[b,c]],
+  ].sort(()=>Math.random()-0.5); // shuffle so ties don't always resolve the same way
+
+  let best = partitions[0], bestRepeats = Infinity;
+  for(const part of partitions){
+    const repeats = (partnerHistory.has(pairKey(part[0][0].name,part[0][1].name))?1:0)
+                  + (partnerHistory.has(pairKey(part[1][0].name,part[1][1].name))?1:0);
+    if(repeats < bestRepeats){ bestRepeats = repeats; best = part; if(repeats===0) break; }
+  }
+  partnerHistory.add(pairKey(best[0][0].name, best[0][1].name));
+  partnerHistory.add(pairKey(best[1][0].name, best[1][1].name));
+  return best;
+}
+// Scans the current (possibly manually-swapped) schedule and counts how many
+// times each pair of names has been teamed together this week, so repeats
+// can be flagged live regardless of whether they came from generation or a
+// manual swap.
+function computePartnerCounts(){
+  const counts = {};
+  schedule.forEach(rd=>{
+    rd.groups.forEach(g=>{
+      g.teams.forEach(team=>{
+        if(team.length===2){
+          const k = pairKey(team[0].name, team[1].name);
+          counts[k] = (counts[k]||0)+1;
+        }
+      });
+    });
+  });
+  return counts;
 }
 
 /* ---------------------------------------------------------------------
@@ -1089,6 +1129,7 @@ function renderMatchups(){
     2: "Skill-matched \u2014 everyone in a match is within one skill level of each other.",
     3: "Open round \u2014 no skill restriction."
   };
+  const partnerCounts = computePartnerCounts();
 
   let html = `
     <div class="matchups-intro">Round 0 is played informally on whoever's court is free first \u2014 not scheduled here.</div>
@@ -1114,11 +1155,13 @@ function renderMatchups(){
 
     rd.groups.forEach((g, gidx)=>{
       const invalid = rd.restricted && !isGroupValid(g.players);
+      const repeat0 = partnerCounts[pairKey(g.teams[0][0].name, g.teams[0][1].name)] > 1;
+      const repeat1 = partnerCounts[pairKey(g.teams[1][0].name, g.teams[1][1].name)] > 1;
       html += `<div class="match-card ${invalid?'invalid':''}">
         <div class="court-label">Court ${gidx+1}</div>
-        ${teamHtml(g.teams[0], ridx, gidx)}
+        ${teamHtml(g.teams[0], ridx, gidx, repeat0)}
         <div class="net"></div>
-        ${teamHtml(g.teams[1], ridx, gidx)}
+        ${teamHtml(g.teams[1], ridx, gidx, repeat1)}
         ${invalid ? `<div class="flag">\u26A0 skill levels more than 1 apart (manual override)</div>` : ''}
       </div>`;
     });
@@ -1146,8 +1189,10 @@ function renderMatchups(){
   document.getElementById('copyBtn').addEventListener('click', copySummary);
 }
 
-function teamHtml(team, ridx, gidx){
-  return `<div class="team">${team.map(p=>playerChipHtml(p, ridx)).join('')}</div>`;
+function teamHtml(team, ridx, gidx, isRepeat){
+  return `<div class="team">${team.map(p=>playerChipHtml(p, ridx)).join('')}${
+    isRepeat ? `<div class="flag" style="margin-top:0;">\u26A0 already partnered this week</div>` : ''
+  }</div>`;
 }
 function playerChipHtml(p, ridx){
   const sel = swapSelection && swapSelection.roundIdx===ridx && swapSelection.playerName===p.name;
