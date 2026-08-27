@@ -130,12 +130,20 @@ button:active{transform:scale(0.97);}
 
 /* Week setup player list */
 .weekplayer{
-  display:grid;grid-template-columns:1fr 46px 150px 90px 34px;gap:8px;align-items:center;
+  display:grid;grid-template-columns:1fr 40px repeat(4,32px) 30px;gap:6px;align-items:center;
   padding:8px 4px;border-bottom:1px solid var(--line);font-size:14px;
 }
 .weekplayer:last-child{border-bottom:none;}
 .weekplayer .name{font-weight:600;}
 .colhead{font-family:'Barlow Condensed';font-size:11px;text-transform:uppercase;color:#6b7a80;letter-spacing:0.04em;}
+
+/* Per-round availability checkboxes */
+.rdcheck{
+  display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;
+  font-family:'Barlow Condensed';font-size:11px;color:#6b7a80;
+}
+.rdcheck input{width:16px;height:16px;cursor:pointer;}
+.rdcheck-row{display:flex;gap:6px;}
 
 /* Court rows */
 .courtrow{
@@ -233,7 +241,7 @@ table.bulk th{
 table.bulk td{padding:5px 6px;border-bottom:1px solid var(--line);}
 
 @media (max-width:520px){
-  .weekplayer{grid-template-columns:1fr 40px 120px 70px 30px;font-size:13px;}
+  .weekplayer{grid-template-columns:1fr 34px repeat(4,26px) 26px;font-size:12px;gap:3px;}
   .scoreboard .title{font-size:22px;}
   .courtrow{grid-template-columns:22px 60px 1fr 1fr;}
 }
@@ -285,7 +293,7 @@ function defaultWeek(){
       { enabled:false, start:"18:00", end:"21:00" },
     ],
     roundTimes: { 1:"18:45", 2:"19:30", 3:"20:15" },
-    players: []   // [{ name, startRound(0-3), endRound(0-3) }]
+    players: []   // [{ name, rounds:[bool,bool,bool,bool] }] index = round number 0-3
   };
 }
 let week = defaultWeek();
@@ -351,6 +359,17 @@ async function readStorageWithRetry(key){
   }
   return null;
 }
+// Converts an older saved player (startRound/endRound range) into the current
+// per-round checkbox shape, so previously-saved weeks don't get wiped out.
+function migratePlayer(p){
+  if(Array.isArray(p.rounds) && p.rounds.length===4) return p;
+  const rounds = [false,false,false,false];
+  if(typeof p.startRound==='number' && typeof p.endRound==='number'){
+    for(let r=p.startRound; r<=p.endRound; r++){ if(r>=0&&r<=3) rounds[r]=true; }
+  }
+  return { name:p.name, rounds };
+}
+
 async function loadState(){
   const r = await readStorageWithRetry('roster');
   if(r && r.value){
@@ -364,7 +383,7 @@ async function loadState(){
       week = {
         courts: Array.isArray(loaded.courts) && loaded.courts.length===4 ? loaded.courts : base.courts,
         roundTimes: Object.assign({}, base.roundTimes, loaded.roundTimes||{}),
-        players: Array.isArray(loaded.players) ? loaded.players : []
+        players: (Array.isArray(loaded.players) ? loaded.players : []).map(migratePlayer)
       };
     }catch(e){ console.error('bad week data', e); }
   }
@@ -481,38 +500,41 @@ function availableCourtsForRound(r){
     return s<=rtm && rtm<e;
   }).length;
 }
-function startRoundOptionsHtml(selected){
-  let html = `<option value="0" ${selected===0?'selected':''}>Rd 0 (informal)</option>`;
-  for(let r=1;r<=3;r++){
-    const t = week.roundTimes[r] ? ' \u2013 '+formatTime12(week.roundTimes[r]) : '';
-    html += `<option value="${r}" ${selected===r?'selected':''}>Rd ${r}${t}</option>`;
-  }
-  return html;
+// Default per-round availability based on when someone starts: a 5:00 (early/
+// informal) arrival defaults to only Round 0 checked; a normal 6:30 arrival
+// defaults to Rounds 1-3 checked. The organizer can freely check/uncheck any
+// box afterward to override this for any individual player.
+function defaultRoundsFor(kind){
+  if(kind==='early') return [true,false,false,false];
+  return [false,true,true,true]; // 'ontime'
 }
-function endRoundOptionsHtml(startRound, selected){
-  let html = '';
-  for(let r=startRound; r<=3; r++){
-    const t = week.roundTimes[r] ? ' \u2013 '+formatTime12(week.roundTimes[r]) : (r===0?' (informal)':'');
-    html += `<option value="${r}" ${selected===r?'selected':''}>Rd ${r}${t}</option>`;
-  }
-  return html;
+function roundCheckboxesHtml(idPrefix, idx, rounds){
+  return [0,1,2,3].map(r=>{
+    const t = r===0 ? 'informal' : (week.roundTimes[r] ? formatTime12(week.roundTimes[r]) : '');
+    return `<label class="rdcheck" title="Round ${r}${t?' \u2013 '+t:''}">
+      <input type="checkbox" data-${idPrefix}="${idx}" data-round="${r}" ${rounds[r]?'checked':''}>
+      <span>${r}</span>
+    </label>`;
+  }).join('');
 }
-// The sensible default for how long someone plays when it isn't stated explicitly:
-// arriving only for the informal round (0) implies leaving after it; arriving for
-// any scheduled round implies playing through the last scheduled round (3).
-function defaultEndRound(startRound){
-  return startRound===0 ? 0 : 3;
-}
-// How many of tonight's players are in the mix for each round (0-3), using the
-// same startRound<=r<=endRound rule the scheduler itself uses.
+// How many of tonight's players are checked in for each round (0-3).
 function roundTotals(){
   const totals = {0:0,1:0,2:0,3:0};
   week.players.forEach(p=>{
     for(let r=0;r<=3;r++){
-      if(p.startRound<=r && r<=p.endRound) totals[r]++;
+      if(p.rounds && p.rounds[r]) totals[r]++;
     }
   });
   return totals;
+}
+// Refreshes just the four total numbers in place (no full re-render), so
+// checking/unchecking a round box updates the counts immediately.
+function updateRoundTotalsDisplay(){
+  const totals = roundTotals();
+  [0,1,2,3].forEach(r=>{
+    const el = document.getElementById('rt-num-'+r);
+    if(el) el.textContent = totals[r];
+  });
 }
 
 /* ---------------------------------------------------------------------
@@ -670,23 +692,21 @@ function renderWeek(){
     <div class="weekplayer">
       <div class="name">${escapeHtml(p.name)}</div>
       <div><span class="skillbadge skill-${skill}">${skill}</span></div>
-      <select data-week-start="${idx}">${startRoundOptionsHtml(p.startRound)}</select>
-      <select data-week-end="${idx}">${endRoundOptionsHtml(p.startRound, p.endRound)}</select>
+      ${roundCheckboxesHtml('week-round', idx, p.rounds)}
       <button class="btn-danger btn-sm" data-week-remove="${idx}">&times;</button>
     </div>`;
   }).join('');
 
   const bulkPreviewHtml = bulkPreview.length===0 ? '' : `
     <table class="bulk">
-      <thead><tr><th></th><th>Name</th><th>Status</th><th>Start</th><th>End round</th><th>Note</th></tr></thead>
+      <thead><tr><th></th><th>Name</th><th>Status</th><th>Rounds</th><th>Note</th></tr></thead>
       <tbody>
         ${bulkPreview.map((item,idx)=>`
           <tr>
             <td><input type="checkbox" data-bulk-idx="${idx}" ${item.include?'checked':''}></td>
             <td>${escapeHtml(item.name)}</td>
             <td>${item.playing?'Playing':'Not playing'}</td>
-            <td>${item.startRound!=null? ('Rd '+item.startRound) : '\u2014'}</td>
-            <td>${item.endRound!=null? ('Rd '+item.endRound) : '\u2014'}</td>
+            <td>${item.rounds ? item.rounds.map((v,i)=>v?i:null).filter(v=>v!=null).join(', ') || '\u2014' : '\u2014'}</td>
             <td style="color:var(--fault);font-size:12px;">${item.note?escapeHtml(item.note):''}</td>
           </tr>`).join('')}
       </tbody>
@@ -718,15 +738,14 @@ function renderWeek(){
       <div class="round-totals">
         ${[0,1,2,3].map(r=>`
           <div class="round-total">
-            <div class="rt-num">${totals[r]}</div>
+            <div class="rt-num" id="rt-num-${r}">${totals[r]}</div>
             <div class="rt-label">Rd ${r}${r===0?' (informal)':''}</div>
           </div>`).join('')}
       </div>
       <div class="weekplayer" style="border-bottom:2px solid var(--line);padding-bottom:6px;">
         <div class="colhead">Name</div>
         <div class="colhead">Skill</div>
-        <div class="colhead">Start</div>
-        <div class="colhead">End round</div>
+        <div class="colhead" style="grid-column:span 4;text-align:center;">Playing which rounds</div>
         <div></div>
       </div>
       ${rows}`;
@@ -752,12 +771,8 @@ function renderWeek(){
           </select>
         </div>
         <div class="field">
-          <label>Start round</label>
-          <select id="weekPlayerStart">${startRoundOptionsHtml(0)}</select>
-        </div>
-        <div class="field">
-          <label>End round</label>
-          <select id="weekPlayerEnd">${endRoundOptionsHtml(0, defaultEndRound(0))}</select>
+          <label>Playing rounds</label>
+          <div class="rdcheck-row">${roundCheckboxesHtml('newplayer-round', 0, defaultRoundsFor('ontime'))}</div>
         </div>
         <button class="btn-primary" id="addWeekPlayerBtn">Add to tonight</button>
       </div>
@@ -766,7 +781,7 @@ function renderWeek(){
 
     <div class="card">
       <h3>Paste from your sign-up sheet</h3>
-      <p class="help">Select the name column plus the two True/False columns in Google Sheets and copy &mdash; then paste below, one player per line (tab or comma separated). Format: <code>Name, [TRUE/FALSE for Round 1], [TRUE/FALSE for Round 0]</code>. If column 2 is TRUE, they're mapped to Round 1 (and assumed to play through Round 3). If column 2 is FALSE and column 3 is TRUE, they're mapped to Round 0 only (the informal round, not scheduled here). If both are FALSE, they're skipped as not playing. End round isn't read from the paste &mdash; adjust it afterward in the list below if someone's leaving early. Any header row (e.g. "Name, In/Out") is ignored automatically.</p>
+      <p class="help">Select the name column plus the two True/False columns in Google Sheets and copy &mdash; then paste below, one player per line (tab or comma separated). Format: <code>Name, [TRUE/FALSE for 6:30], [TRUE/FALSE for 5:00]</code>. A TRUE 6:30 defaults them to Rounds 1, 2, and 3 checked. A TRUE 5:00 (with 6:30 FALSE) defaults them to only Round 0 checked. Both FALSE skips them as not playing. You can check/uncheck individual rounds for anyone afterward in the list below. Any header row (e.g. "Name, In/Out") is ignored automatically.</p>
       <textarea id="bulkText" placeholder="Dave, TRUE, FALSE
 Steve, FALSE, FALSE
 Rich, FALSE, TRUE">${escapeHtml(bulkRawText)}</textarea>
@@ -809,21 +824,13 @@ Rich, FALSE, TRUE">${escapeHtml(bulkRawText)}</textarea>
       renderWeek(); // refresh dependent start-round labels
     });
   });
-  // Player rows
-  el.querySelectorAll('[data-week-start]').forEach(sel=>{
-    sel.addEventListener('change', async (e)=>{
-      const idx = parseInt(e.target.getAttribute('data-week-start'),10);
-      const newStart = parseInt(e.target.value,10);
-      week.players[idx].startRound = newStart;
-      if(week.players[idx].endRound < newStart) week.players[idx].endRound = defaultEndRound(newStart);
-      await saveWeek();
-      renderWeek();
-    });
-  });
-  el.querySelectorAll('[data-week-end]').forEach(sel=>{
-    sel.addEventListener('change', async (e)=>{
-      const idx = parseInt(e.target.getAttribute('data-week-end'),10);
-      week.players[idx].endRound = parseInt(e.target.value,10);
+  // Player rows: per-round checkboxes
+  el.querySelectorAll('[data-week-round]').forEach(cb=>{
+    cb.addEventListener('change', async (e)=>{
+      const idx = parseInt(e.target.getAttribute('data-week-round'),10);
+      const r = parseInt(e.target.getAttribute('data-round'),10);
+      week.players[idx].rounds[r] = e.target.checked;
+      updateRoundTotalsDisplay();
       await saveWeek();
     });
   });
@@ -843,11 +850,6 @@ Rich, FALSE, TRUE">${escapeHtml(bulkRawText)}</textarea>
     const exists = roster[nameInput.value.trim()] !== undefined;
     newSkillField.style.display = exists ? 'none' : 'flex';
   });
-  document.getElementById('weekPlayerStart').addEventListener('change', (e)=>{
-    const s = parseInt(e.target.value,10);
-    const endSel = document.getElementById('weekPlayerEnd');
-    endSel.innerHTML = endRoundOptionsHtml(s, defaultEndRound(s));
-  });
   document.getElementById('addWeekPlayerBtn').addEventListener('click', async ()=>{
     const errEl = document.getElementById('weekErr');
     const name = nameInput.value.trim();
@@ -860,9 +862,11 @@ Rich, FALSE, TRUE">${escapeHtml(bulkRawText)}</textarea>
       roster[name] = parseInt(document.getElementById('weekPlayerSkill').value,10);
       await saveRoster();
     }
-    const startRound = parseInt(document.getElementById('weekPlayerStart').value,10);
-    const endRound = parseInt(document.getElementById('weekPlayerEnd').value,10);
-    week.players.push({ name, startRound, endRound });
+    const rounds = [0,1,2,3].map(r=>{
+      const cb = document.querySelector(`[data-newplayer-round="0"][data-round="${r}"]`);
+      return cb ? cb.checked : false;
+    });
+    week.players.push({ name, rounds });
     await saveWeek();
     renderWeek();
   });
@@ -897,10 +901,10 @@ Rich, FALSE, TRUE">${escapeHtml(bulkRawText)}</textarea>
         if(!cb.checked) return;
         const idx = parseInt(cb.getAttribute('data-bulk-idx'),10);
         const item = bulkPreview[idx];
-        if(!item || item.startRound==null){ skippedInvalid++; return; }
+        if(!item || !item.rounds){ skippedInvalid++; return; }
         if(week.players.some(p=>p.name.toLowerCase()===item.name.toLowerCase())){ skippedDup++; return; }
         if(roster[item.name]===undefined){ roster[item.name]=2; newRosterNames.push(item.name); }
-        week.players.push({ name:item.name, startRound:item.startRound, endRound:item.endRound });
+        week.players.push({ name:item.name, rounds:item.rounds });
         added++;
       });
       await saveRoster(); await saveWeek();
@@ -954,11 +958,11 @@ function parseBulkText(text){
     const col2 = boolCells.length>0 ? parseBool(boolCells[0]) : null;
     const col3 = boolCells.length>1 ? parseBool(boolCells[1]) : null;
 
-    let startRound = null, playing = false, note = '';
+    let rounds = null, playing = false, note = '';
     if(col2 === true){
-      startRound = 1; playing = true;
+      rounds = defaultRoundsFor('ontime'); playing = true;
     } else if(col2 === false && col3 === true){
-      startRound = 0; playing = true;
+      rounds = defaultRoundsFor('early'); playing = true;
     } else if(col2 === false && col3 === false){
       playing = false;
     } else {
@@ -967,14 +971,9 @@ function parseBulkText(text){
       note = `Couldn't read True/False in "${cols[1]||''}" / "${cols[2]||''}" \u2014 skipped.`;
     }
 
-    // End round never comes from the paste: Round 0 starters default to leaving
-    // after Round 0; anyone starting on a scheduled round defaults to playing
-    // through the last scheduled round.
-    const endRound = startRound===null ? null : defaultEndRound(startRound);
-
     return {
-      name, playing, startRound, endRound, note,
-      include: playing && startRound!==null && !!name
+      name, playing, rounds, note,
+      include: playing && !!rounds && !!name
     };
   }).filter(r=>r && r.name);
 }
@@ -1046,15 +1045,14 @@ function computeSchedule(){
   const players = week.players.map(p=>({
     name: p.name,
     skill: roster[p.name] !== undefined ? roster[p.name] : 2,
-    startRound: p.startRound,
-    endRound: p.endRound
+    rounds: p.rounds
   }));
   const playedCount = {};
   players.forEach(p=> playedCount[p.name]=0);
   const partnerHistory = new Set(); // pairs already teamed together tonight, filled in as rounds are built
   const rounds = [];
   for(let r=1; r<=3; r++){
-    const eligible = players.filter(p=> p.startRound<=r && r<=p.endRound);
+    const eligible = players.filter(p=> p.rounds && p.rounds[r]);
     const restricted = (r===1 || r===2);
     const courtsAvailable = availableCourtsForRound(r);
     const maxSlots = courtsAvailable*4;
@@ -1130,9 +1128,21 @@ function renderMatchups(){
     3: "Open round \u2014 no skill restriction."
   };
   const partnerCounts = computePartnerCounts();
+  const round0Players = week.players
+    .filter(p=> p.rounds && p.rounds[0])
+    .map(p=> ({ name:p.name, skill: roster[p.name]!==undefined ? roster[p.name] : 2 }));
 
   let html = `
-    <div class="matchups-intro">Round 0 is played informally on whoever's court is free first \u2014 not scheduled here.</div>
+    <div class="round-block">
+      <div class="round-head">
+        <div class="rnum">ROUND 0</div>
+        <div class="rlabel">Informal \u2014 first come, first served</div>
+      </div>
+      <div class="round-note">Not scheduled here \u2014 just whoever's checked in for the early slot.</div>
+      ${round0Players.length===0
+        ? `<div class="empty">Nobody's checked in for Round 0.</div>`
+        : `<div class="bench-box" style="margin-top:0;">${round0Players.map(p=>staticChipHtml(p)).join(' ')}</div>`}
+    </div>
     <div class="toolbar">
       <button class="btn-primary" id="regenBtn">Regenerate</button>
       <button class="btn-secondary" id="copyBtn">Copy summary</button>
@@ -1178,7 +1188,7 @@ function renderMatchups(){
 
   el.innerHTML = html;
 
-  el.querySelectorAll('.player-chip').forEach(chip=>{
+  el.querySelectorAll('.player-chip[data-round]').forEach(chip=>{
     chip.addEventListener('click', ()=> handleChipClick(chip));
   });
   document.getElementById('regenBtn').addEventListener('click', ()=>{
@@ -1198,6 +1208,15 @@ function playerChipHtml(p, ridx){
   const sel = swapSelection && swapSelection.roundIdx===ridx && swapSelection.playerName===p.name;
   return `<span class="player-chip ${sel?'selected':''}"
       data-round="${ridx}" data-name="${escapeHtml(p.name)}">
+      <span class="skillbadge skill-${p.skill}" style="width:18px;height:18px;font-size:10px;">${p.skill}</span>
+      ${escapeHtml(p.name)}
+    </span>`;
+}
+// Same look as playerChipHtml, but with no data-round/data-name so it's
+// excluded from the click-to-swap wiring — used for Round 0's plain list,
+// which isn't part of the generated/swappable schedule.
+function staticChipHtml(p){
+  return `<span class="player-chip" style="cursor:default;">
       <span class="skillbadge skill-${p.skill}" style="width:18px;height:18px;font-size:10px;">${p.skill}</span>
       ${escapeHtml(p.name)}
     </span>`;
@@ -1260,7 +1279,10 @@ function handleChipClick(chip){
 
 function copySummary(){
   const dateStr = new Date().toLocaleDateString(undefined, { weekday:'long', month:'short', day:'numeric' });
-  let text = `Thursday Night Matchups \u2014 ${dateStr}\n(Round 0 not included \u2014 first-come-first-served)\n\n`;
+  const round0Names = week.players.filter(p=>p.rounds && p.rounds[0]).map(p=>p.name);
+  let text = `Thursday Night Matchups \u2014 ${dateStr}\n\n`;
+  text += `ROUND 0 (informal, not scheduled)\n`;
+  text += round0Names.length>0 ? `  ${round0Names.join(', ')}\n\n` : `  \u2014\n\n`;
   schedule.forEach(rd=>{
     text += `ROUND ${rd.round}${rd.timeLabel?' ('+rd.timeLabel+')':''}\n`;
     rd.groups.forEach((g,i)=>{
