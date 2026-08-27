@@ -950,25 +950,34 @@ function parseBulkText(text){
     const name = cols[0] || '';
     if(BULK_HEADER_NAMES.includes(name.toLowerCase())) return null; // header row, ignore entirely
 
-    // Some sheets paste an extra In/Out status column alongside the two time
-    // checkboxes. Rather than assume a fixed column position, scan every cell
-    // after the name for ones that actually read TRUE/FALSE and take the first
-    // two, in order — any status text ("In"/"Out") in between is ignored.
-    const boolCells = cols.slice(1).filter(c => parseBool(c) !== null);
-    const col2 = boolCells.length>0 ? parseBool(boolCells[0]) : null;
-    const col3 = boolCells.length>1 ? parseBool(boolCells[1]) : null;
+    if(cols.length < 3){
+      return { name, playing:false, rounds:null, note:'Not enough columns to read availability \u2014 skipped.', include:false };
+    }
+
+    // The two time-slot checkboxes are always the LAST two columns of the row,
+    // whatever else (like an In/Out status column) sits in between them and
+    // the name. A genuinely blank cell (a checkbox that isn't really wired up
+    // as a checkbox in the sheet) is treated as unchecked/FALSE rather than
+    // failing the whole row \u2014 but it's still called out in the note so you
+    // can go fix that cell in the sheet if you want a clean paste next time.
+    const c630 = cols[cols.length-2];
+    const c500 = cols[cols.length-1];
+    let b630 = parseBool(c630);
+    let b500 = parseBool(c500);
+    const unreadable = [];
+    if(b630===null){ unreadable.push(`6:30 ("${c630||'blank'}")`); b630=false; }
+    if(b500===null){ unreadable.push(`5:00 ("${c500||'blank'}")`); b500=false; }
 
     let rounds = null, playing = false, note = '';
-    if(col2 === true){
+    if(b630 === true){
       rounds = defaultRoundsFor('ontime'); playing = true;
-    } else if(col2 === false && col3 === true){
+    } else if(b630 === false && b500 === true){
       rounds = defaultRoundsFor('early'); playing = true;
-    } else if(col2 === false && col3 === false){
-      playing = false;
     } else {
-      // couldn't read one or both columns as True/False
       playing = false;
-      note = `Couldn't read True/False in "${cols[1]||''}" / "${cols[2]||''}" \u2014 skipped.`;
+    }
+    if(unreadable.length>0){
+      note = `Couldn't read ${unreadable.join(' or ')} as TRUE/FALSE \u2014 treated as unchecked. Raw row as pasted: ${JSON.stringify(cols)}`;
     }
 
     return {
